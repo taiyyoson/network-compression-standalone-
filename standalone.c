@@ -44,7 +44,7 @@ int main (int argc, char *argv[]) {
     
     //FIRST, parse json file and store in struct like in pt 1 client.c
     if (argc < 2) {
-        printf("missing JSON file in cmd line arg!");
+        printf("missing JSON file in cmd line arg!\n");
         return EXIT_FAILURE;
     }
     json_t *root = json_init(argv);
@@ -86,7 +86,7 @@ int main (int argc, char *argv[]) {
     //SECOND, open socket for SYN head and tail packets (you will pass this into make_head and make_tail func), remember this is a raw socket
     int sockfd;
     if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) {
-	    printf("ERROR opening socket");
+	    printf("ERROR opening socket\n");
         exit(0);
     }
         //need to enable header included so YOU make the header for the packet
@@ -96,7 +96,7 @@ int main (int argc, char *argv[]) {
                     setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one));*/
     int incl_val = 1;
     if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &incl_val, sizeof(incl_val)) < 0) {
-        printf("error setting IP header building to process");
+        printf("error setting IP header building to process\n");
     }
     //IMPORTANT: INTIALIZE ALL VARIABLES/PARAMETERS HERE SO FUNCTION CALLS ARE ONE AFTER ANOTHER (for seamless, little delay)
     int pack_size = atoi(config[7].value);
@@ -170,7 +170,7 @@ json_t *json_init (char *input[]) {
     //this is to test that .json parses correctly
     FILE *fp = fopen(input[1], "r"); 
     if (!fp) {
-        printf("No JSON file was given.");
+        printf("No JSON file was given\n");
         return NULL;
     }
     fseek(fp, 0, SEEK_END);
@@ -317,20 +317,20 @@ void send_UDP (jsonLine *items) {
     //create socket
     int sockfd;
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-        printf("Error making UDP socket");
+        printf("Error making UDP socket\n");
         return;
     }
 
     //set DF bit
     int dfval = 1;
     if (setsockopt(sockfd, IPPROTO_IP, IP_DONTFRAG, &dfval, sizeof(dfval)) < 0) {
-        printf("error with setting don't fragment bit");
+        printf("error with setting don't fragment bit\n");
     }
 
     //set TTL bit to default (255)
     int ttlval = atoi(items[10].value);
     if (setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttlval, sizeof(ttlval)) < 0) 
-        printf("error with setting TTL value");
+        printf("error with setting TTL value\n");
 
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
@@ -358,19 +358,18 @@ void send_UDP (jsonLine *items) {
             low_entropy_BUFFER[0] = pak_count & 0xFF;
             low_entropy_BUFFER[1] = pak_count & 0xFF;
             if (sendto(sockfd, low_entropy_BUFFER, packet_size, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) 
-                printf("packet failed to send");
+                printf("packet failed to send\n");
             else 
                 true_count++;
             pak_count++;
-        } while ((sec <= inter_time) && (pak_count <= train_size)); //items[8] is variable that holds inter_time
-        printf("true_count: %d and pak_count: %d. Client/server lost %d packets from the low entropy payload", true_count, pak_count, pak_count - true_count);
+        } while ((sec <= inter_time) && (pak_count <= train_size)); 
     
     //second time, restart before timer and new difference timer
         //make random packet_data using random_file in ../dir
         char high_entropy_BUFFER[packet_size];
         FILE *fp;
         if ((fp = fopen("../random_file", "rb")) == NULL) {
-            printf("error opening file");
+            printf("error opening file\n");
         }
         fread(high_entropy_BUFFER, sizeof(char), packet_size, fp);
         fclose(fp);
@@ -385,13 +384,11 @@ void send_UDP (jsonLine *items) {
             high_entropy_BUFFER[1] = pak_count & 0xFF;
             //send UDP packet (6000 times again)
             if (sendto(sockfd, high_entropy_BUFFER, packet_size, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) 
-                printf("packet failed to send");
+                printf("packet failed to send\n");
             else 
                 true_count++;
             pak_count++;
         } while ((sec <= inter_time) && (pak_count <= train_size));
-        printf("true_count: %d and pak_count: %d. Client/server lost %d packets from the high entropy payload", true_count, pak_count, pak_count - true_count);
-    
     close(sockfd);
 }
 
@@ -401,14 +398,14 @@ void *recv_RST (void *arg) {
     //typecasting our result var
     int *ans = (int *)arg;
     if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_IP)) == -1) {
-        printf("error creating socket");
+        printf("error creating socket\n");
         exit(EXIT_FAILURE);
     }
 
     //so we can access header fields
     int optval = 1;
     if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &optval, sizeof(optval)) < 0) {
-        printf("setsockopt failed");
+        printf("setsockopt failed\n");
         exit(EXIT_FAILURE);
     }
 
@@ -420,7 +417,7 @@ void *recv_RST (void *arg) {
     sin.sin_port = 0;
 
     if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
-        perror("Bind failed");
+        perror("Bind failed\n");
         exit(EXIT_FAILURE);
     }
 
@@ -436,7 +433,7 @@ void *recv_RST (void *arg) {
         socklen_t sender_addr_len = sizeof(sender_addr);
 
         if ((recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len)) < 0) {
-            printf("\ncould not receive RST packet");
+            printf("could not receive RST packet\n");
             continue;
         }
 
