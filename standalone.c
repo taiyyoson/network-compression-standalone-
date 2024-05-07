@@ -30,7 +30,7 @@ unsigned short csum (unsigned short *buf, int nwords);
 unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload);
 void make_SYN_packet (int sockfd, int packet_size, char *ADDR, int PORT);
 json_t *json_init(char *input[]);
-void recv_RST (void *res);
+void *recv_RST (void *arg);
 
 int main (int argc, char *argv[]) {
     /*
@@ -204,7 +204,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     iph->ip_v = 4;
     iph->ip_tos = 0;
     iph->ip_len = sizeof (struct ip) + sizeof(struct tcphdr) + packet_size;
-    iph->ip_id = htonl(54321);
+    iph->ip_id = htons(54321);
     iph->ip_off = 0;
     iph->ip_ttl = 255;
     iph->ip_p = IPPROTO_TCP;
@@ -223,7 +223,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_x2 = 0;
     tcph->th_off = 0;
     tcph->th_flags = TH_SYN;
-    tcph->th_win = htonl(65535);
+    tcph->th_win = htons(65535);
     tcph->th_sum = 0; //find tcp checksum function
     tcph->th_urp = 0;
 
@@ -316,7 +316,7 @@ unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload) 
 void send_UDP (jsonLine *items) { 
     //create socket
     int sockfd;
-    if (sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP) == -1) {
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
         printf("Error making UDP socket");
         return;
     }
@@ -395,11 +395,11 @@ void send_UDP (jsonLine *items) {
     close(sockfd);
 }
 
-void recv_RST (void *res) {
+void *recv_RST (void *arg) {
     sleep(SYN_WAIT_TIME);
     int sockfd;
     //typecasting our result var
-    int *ans = (int *)res;
+    int *ans = (int *)arg;
     if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_IP)) == -1) {
         printf("error creating socket");
         exit(EXIT_FAILURE);
@@ -443,7 +443,7 @@ void recv_RST (void *res) {
         struct ip *iph = (struct ip *)buffer;
         struct tcphdr *tcph = (struct tcphdr *)(buffer + sizeof(struct ip));
 
-        if (!(strcmp(tcph->th_flags, TH_RST))) {
+        if ((tcph->th_flags) == TH_RST) {
             printf("\nreceived RST packet\n");
             rst_num++;
         }
@@ -460,6 +460,7 @@ void recv_RST (void *res) {
         *ans = 1;
 
     close(sockfd);
+    return NULL;
 }
 
 
