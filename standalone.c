@@ -1,3 +1,8 @@
+//Taiyo Williamson, 20688536
+//standalone application to detect network compression
+
+
+//header files
 #include <stdio.h>
 #include <sys/socket.h>
 #include <stdlib.h>
@@ -9,8 +14,10 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
-#include <jansson.h>
 #include <pthread.h>
+#include "cJSON.h"
+
+//global constants
 #define ITEMS 11
 #define BUFFER_MAX 2048
 #define RST_COUNT 2
@@ -18,19 +25,20 @@
 #define SYN_WAIT_TIME 15
 #define DIFF_THRESHOLD 100
 
+//struct to hold json line items
 typedef struct {
     char *key;
     const char *value;
 } jsonLine;
 
 
-void send_UDP (jsonLine *items);
-static unsigned short compute_checksum(unsigned short *addr, unsigned int count);
+void send_UDP (jsonLine *items); //sending UDP packet trains, exact same as pt 1
+static unsigned short compute_checksum(unsigned short *addr, unsigned int count);//computing IP and TCP checksums
 unsigned short csum (unsigned short *buf, int nwords);
 unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload);
-void make_SYN_packet (int sockfd, int packet_size, char *ADDR, int PORT);
-json_t *json_init(char *input[]);
-void *recv_RST (void *arg);
+void make_SYN_packet (int sockfd, int packet_size, char *ADDR, int PORT); //making HEAD and TAIL SYN packet, and then sending to server closed ports
+cJSON *JSONObj(char *input[]); //same as pt 1, initializing json parser
+void *recv_RST (void *arg); //receiving RST packets, and calculating the difference, ran in a separate thread
 
 int main (int argc, char *argv[]) {
     /*
@@ -47,19 +55,35 @@ int main (int argc, char *argv[]) {
         printf("missing JSON file in cmd line arg!\n");
         return EXIT_FAILURE;
     }
-    json_t *root = json_init(argv);
+    //array of structs, representing config.json
+    cJSON *json = JSONObj(argv);
+  
+    // access the JSON data 
+    cJSON *server_ip_addr = cJSON_GetObjectItemCaseSensitive(json, "server_ip_addr"); 
+    //printf("%s\n", server_ip_addr->valuestring);
+    cJSON *UDP_src_port = cJSON_GetObjectItemCaseSensitive(json, "UDP_src_port"); 
+    cJSON *UDP_dest_port = cJSON_GetObjectItemCaseSensitive(json, "UDP_dest_port"); 
+    cJSON *TCP_dest_port_headSYN = cJSON_GetObjectItemCaseSensitive(json, "TCP_dest_port_headSYN"); 
+    cJSON *TCP_dest_port_tailSYN = cJSON_GetObjectItemCaseSensitive(json, "TCP_dest_port_tailSYN"); 
+    cJSON *TCP_port_preProb = cJSON_GetObjectItemCaseSensitive(json, "TCP_port_preProb"); 
+    cJSON *TCP_port_postProb = cJSON_GetObjectItemCaseSensitive(json, "TCP_port_postProb"); 
+    cJSON *UDP_packet_size = cJSON_GetObjectItemCaseSensitive(json, "UDP_packet_size"); 
+    cJSON *inter_time = cJSON_GetObjectItemCaseSensitive(json, "inter_time"); 
+    cJSON *UDP_train_size = cJSON_GetObjectItemCaseSensitive(json, "UDP_train_size"); 
+    cJSON *UDP_TTL = cJSON_GetObjectItemCaseSensitive(json, "UDP_TTL"); 
+
     jsonLine config[ITEMS] = {
-      {"server_ip_addr", json_string_value(json_object_get(root, "server_ip_addr"))},
-      {"UDP_src_port", json_string_value(json_object_get(root, "UDP_src_port"))},
-      {"UDP_dest_port", json_string_value(json_object_get(root, "UDP_dest_port"))},
-      {"TCP_dest_port_headSYN", json_string_value(json_object_get(root, "TCP_dest_port_headSYN"))},
-      {"TCP_dest_port_tailSYN", json_string_value(json_object_get(root, "TCP_dest_port_tailSYN"))},
-      {"TCP_port_preProb", json_string_value(json_object_get(root, "TCP_port_preProb"))},
-      {"TCP_port_postProb", json_string_value(json_object_get(root, "TCP_port_postProb"))},
-      {"UDP_packet_size", json_string_value(json_object_get(root, "UDP_packet_size"))},
-      {"inter_time", json_string_value(json_object_get(root, "inter_time"))},
-      {"UDP_train_size", json_string_value(json_object_get(root, "UDP_train_size"))},
-      {"UDP_TTL", json_string_value(json_object_get(root, "UDP_TTL"))}
+      {"server_ip_addr", server_ip_addr->valuestring},
+      {"UDP_src_port", UDP_src_port->valuestring},
+      {"UDP_dest_port", UDP_dest_port->valuestring},
+      {"TCP_dest_port_headSYN", TCP_dest_port_headSYN->valuestring},
+      {"TCP_dest_port_tailSYN", TCP_dest_port_tailSYN->valuestring},
+      {"TCP_port_preProb", TCP_port_preProb->valuestring},
+      {"TCP_port_postProb", TCP_port_postProb->valuestring},
+      {"UDP_packet_size", UDP_packet_size->valuestring},
+      {"inter_time", inter_time->valuestring},
+      {"UDP_train_size", UDP_train_size->valuestring},
+      {"UDP_TTL", UDP_TTL->valuestring}
     };
 
 
@@ -109,8 +133,7 @@ int main (int argc, char *argv[]) {
         //make_HEAD_SYN()  
             //this function will take many parameters, but guaranteed one is the socket
             //two phases: making packet, and sending it
-    
-    //IMPLEMENT TCP CHECKSUM FUNC
+
     make_SYN_packet(sockfd, pack_size, s_addr, port_HEADSYN);
 
             //making the SYN packet, needs a couple things:
@@ -160,42 +183,43 @@ int main (int argc, char *argv[]) {
 
 
     //and then, DONE WITH PT 2   
-    json_decref(root);
+    cJSON_Delete(json);
     close(sockfd);
     return EXIT_SUCCESS; 
 }
 
-json_t *json_init (char *input[]) {
-    int json_test = 1;
-    //this is to test that .json parses correctly
+cJSON *JSONObj(char *input[]) {
+    // open the file 
     FILE *fp = fopen(input[1], "r"); 
-    if (!fp) {
-        printf("No JSON file was given\n");
-        return NULL;
-    }
-    fseek(fp, 0, SEEK_END);
-    long file_size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    char *json_buffer = malloc(file_size);
-    fread(json_buffer, 1, file_size, fp);
+    if (fp == NULL) { 
+        printf("Error: Unable to open the file.\n"); 
+        exit(EXIT_FAILURE); 
+    } 
+  
+    // read the file contents into a string 
+    char buffer[1024]; 
+    int len = fread(buffer, 1, sizeof(buffer), fp); 
     fclose(fp);
 
-    json_error_t error;
-    json_t *root = json_loads(json_buffer, 0, &error);
-    free(json_buffer);
-    if (!root) {
-        fprintf(stderr, "Failed to parse JSON: %s\n", error.text);
-        return NULL;
-    }
-    
-    return root;
+    // parse the JSON data 
+    cJSON *json = cJSON_Parse(buffer); 
+    if (json == NULL) { 
+        const char *error_ptr = cJSON_GetErrorPtr(); 
+        if (error_ptr != NULL) { 
+            printf("Error: %s\n", error_ptr); 
+        } 
+        cJSON_Delete(json); 
+        exit(EXIT_FAILURE);
+    } 
+
+    return json;
 }
 
 void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     //making the packet
     //using UDP packet size, doesn't really matter, but for contiuency
     char *buffer = (char *) malloc(packet_size + sizeof(struct tcphdr) + sizeof(struct ip));
+    //assigning ip and tcp header fields in the buffer
     struct ip *iph = (struct ip*) buffer;
     struct tcphdr *tcph = (struct tcphdr*) (buffer + sizeof(struct ip));
 
@@ -208,13 +232,12 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     iph->ip_off = 0;
     iph->ip_ttl = 255;
     iph->ip_p = IPPROTO_TCP;
-    iph->ip_sum = 0;
+    iph->ip_sum = 0; //assign to 0 first
     iph->ip_src.s_addr = INADDR_ANY;
     iph->ip_dst.s_addr = inet_addr(ADDR);
 
     iph->ip_sum = csum((unsigned short *) buffer, iph->ip_len >> 1);
 
-    //study this up later
     //tcphdr
     tcph->th_sport = htons(1234);
     tcph->th_dport = htons(PORT);
@@ -224,13 +247,13 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_off = 0;
     tcph->th_flags = TH_SYN;
     tcph->th_win = htons(65535);
-    tcph->th_sum = 0; //find tcp checksum function
+    tcph->th_sum = 0; //assign to 0 first
     tcph->th_urp = 0;
 
-    //this is iffy? if code doesn't work, check this FIRST lmao
     tcph->th_sum = compute_tcp_checksum(iph, (unsigned short *)tcph);
 
 
+    //fill in server info
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
@@ -318,20 +341,25 @@ void send_UDP (jsonLine *items) {
     int sockfd;
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
         printf("Error making UDP socket\n");
-        return;
+        exit(EXIT_FAILURE);
     }
 
     //set DF bit
     int dfval = 1;
     if (setsockopt(sockfd, IPPROTO_IP, IP_DONTFRAG, &dfval, sizeof(dfval)) < 0) {
         printf("error with setting don't fragment bit\n");
+        exit(EXIT_FAILURE);
     }
 
     //set TTL bit to default (255)
     int ttlval = atoi(items[10].value);
-    if (setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttlval, sizeof(ttlval)) < 0) 
+    if (setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttlval, sizeof(ttlval)) < 0)  {
         printf("error with setting TTL value\n");
+        exit(EXIT_FAILURE);
+    }
 
+
+    //filling in server info
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
@@ -345,6 +373,8 @@ void send_UDP (jsonLine *items) {
     int inter_time = atoi(items[8].value);
     char low_entropy_BUFFER[packet_size];
     memset(low_entropy_BUFFER, 0, packet_size);
+
+    //EXACT SAME AS PT 1
     //first time, set timer with inter_time
             //while timer isn't == 0 (or packet count != 6000), run while loop
             //to make and send UDP packets with all 0s buffer 
@@ -393,10 +423,12 @@ void send_UDP (jsonLine *items) {
 }
 
 void *recv_RST (void *arg) {
+    //sleep for SYN_WAIT_TIME seconds, wait for at least UDP packet train to send before listening for RST packets
     sleep(SYN_WAIT_TIME);
     int sockfd;
-    //typecasting our result var
+    //typecasting our result var, this points to our result in main that we use to detect network compression
     int *ans = (int *)arg;
+    //creating socket
     if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_IP)) == -1) {
         printf("error creating socket\n");
         exit(EXIT_FAILURE);
@@ -410,17 +442,20 @@ void *recv_RST (void *arg) {
     }
 
 
+    //filling in server info
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET; 
     sin.sin_addr.s_addr = INADDR_ANY;
     sin.sin_port = 0;
 
+    //bind, isn't necessary but nice practice
     if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
         perror("Bind failed\n");
         exit(EXIT_FAILURE);
     }
 
+    //incrementing these while listening for RST packets
     int rst_num = 0;
     float sec = 0;
     
@@ -437,9 +472,12 @@ void *recv_RST (void *arg) {
             continue;
         }
 
+
+        //parse through the packet, access tcph is what we want
         struct ip *iph = (struct ip *)buffer;
         struct tcphdr *tcph = (struct tcphdr *)(buffer + sizeof(struct ip));
 
+        //is this packet a RST packet? if so, increase the count, we should be getting two
         if ((tcph->th_flags) == TH_RST) {
             printf("\nreceived RST packet\n");
             rst_num++;
@@ -449,6 +487,7 @@ void *recv_RST (void *arg) {
         sec = difference / CLOCKS_PER_SEC;
     }
 
+    //chaning output res
     if (rst_num > RST_COUNT || rst_num < RST_COUNT)
         *ans = -1;
     else if (sec >= DIFF_THRESHOLD)

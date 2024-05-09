@@ -1,9 +1,9 @@
 PROG = compdetect
-OBJS = standalone
+OBJS = standalone.o cJSON.o
 
 %.o : %.c 
 	gcc -c -g -o $@ $< 
-$(PROG):$(OBJS).o
-	gcc -g -o $@ $^ -ljansson -pthread
+$(PROG):$(OBJS)
+	gcc -g -o $@ $^ -pthread
 clean:
-	rm -rf $(OBJS).o $(PROG)
+	rm -rf $(OBJS) $(PROG)
