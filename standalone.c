@@ -15,6 +15,7 @@
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <pthread.h>
+#include <errno.h>
 #include "cJSON.h"
 
 //global constants
@@ -109,12 +110,12 @@ int main (int argc, char *argv[]) {
 
     //SECOND, open socket for SYN head and tail packets (you will pass this into make_head and make_tail func), remember this is a raw socket
     int sockfd;
-    if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) {
 	    printf("ERROR opening socket\n");
         exit(0);
     }
         //need to enable header included so YOU make the header for the packet
-            /* allow process to build IP header 
+            /* allow process to build IP header
                     int one = 1;
                     const int *val = &one;
                     setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one));*/
@@ -257,14 +258,17 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
-    sin.sin_addr.s_addr = inet_addr(ADDR);
     sin.sin_port = htons(PORT);
+    if (!(inet_pton(AF_INET, ADDR, &(sin.sin_addr)) > 0)) {
+        printf("standalone.c 262: ERROR assigning address to socket");
+        exit(EXIT_FAILURE);
+    }
 
 
     //sending the packet
     int res = sendto (sockfd, buffer, iph->ip_len, 0, (struct sockaddr *)&sin, sizeof(sin) < 0);
     if (res < 0) {
-        printf("error sending SYN packet\n");
+        printf("standalone.c 270: error sending SYN packet\n");
     }
 }
 
@@ -339,7 +343,7 @@ unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload) 
 void send_UDP (jsonLine *items) { 
     //create socket
     int sockfd;
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
         printf("Error making UDP socket\n");
         exit(EXIT_FAILURE);
     }
@@ -429,7 +433,7 @@ void *recv_RST (void *arg) {
     //typecasting our result var, this points to our result in main that we use to detect network compression
     int *ans = (int *)arg;
     //creating socket
-    if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_IP)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_IP)) == -1) {
         printf("error creating socket\n");
         exit(EXIT_FAILURE);
     }
