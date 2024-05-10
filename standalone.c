@@ -116,6 +116,7 @@ int main (int argc, char *argv[]) {
 	    printf("ERROR opening socket\n");
         exit(0);
     }
+    printf("Socket created!\n");
         //need to enable header included so YOU make the header for the packet
             /* allow process to build IP header
                     int one = 1;
