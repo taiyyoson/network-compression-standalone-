@@ -19,7 +19,7 @@
 #include "cJSON.h"
 
 //global constants
-#define ITEMS 11
+#define ITEMS 12
 #define BUFFER_MAX 2048
 #define RST_COUNT 2
 #define INTER_TIME 15
@@ -72,6 +72,7 @@ int main (int argc, char *argv[]) {
     cJSON *inter_time = cJSON_GetObjectItemCaseSensitive(json, "inter_time"); 
     cJSON *UDP_train_size = cJSON_GetObjectItemCaseSensitive(json, "UDP_train_size"); 
     cJSON *UDP_TTL = cJSON_GetObjectItemCaseSensitive(json, "UDP_TTL"); 
+    cJSON *server_wait_time = cJSON_GetObjectItemCaseSensitive(json, "server_wait_time");
 
     jsonLine config[ITEMS] = {
       {"server_ip_addr", server_ip_addr->valuestring},
@@ -84,7 +85,8 @@ int main (int argc, char *argv[]) {
       {"UDP_packet_size", UDP_packet_size->valuestring},
       {"inter_time", inter_time->valuestring},
       {"UDP_train_size", UDP_train_size->valuestring},
-      {"UDP_TTL", UDP_TTL->valuestring}
+      {"UDP_TTL", UDP_TTL->valuestring},
+      {"server_wait_time", server_wait_time->valuestring}
     };
 
 
@@ -260,7 +262,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     sin.sin_family = AF_INET;
     sin.sin_port = htons(PORT);
     if (!(inet_pton(AF_INET, ADDR, &(sin.sin_addr)) > 0)) {
-        printf("standalone.c 262: ERROR assigning address to socket");
+        printf("standalone.c 262: ERROR assigning address to socket\n");
         exit(EXIT_FAILURE);
     }
 
@@ -270,6 +272,8 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     if (res < 0) {
         printf("standalone.c 270: error sending SYN packet\n");
     }
+    else 
+        printf("Sent SYN packet!\n");
 }
 
 //2 diff checksum functions, do the same thing
@@ -343,61 +347,57 @@ unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload) 
 void send_UDP (jsonLine *items) { 
     //create socket
     int sockfd;
-    if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) {
         printf("Error making UDP socket\n");
         exit(EXIT_FAILURE);
     }
 
     //set DF bit
-    int dfval = 1;
-    if (setsockopt(sockfd, IPPROTO_IP, IP_DONTFRAG, &dfval, sizeof(dfval)) < 0) {
+    int dfval = IP_PMTUDISC_DO; //linux df bit
+    if (setsockopt(sockfd, IPPROTO_IP, IP_MTU_DISCOVER, &dfval, sizeof(dfval)) < 0) { //if linux, use IP_MTU_DISCOVER & IP_PMTUDISC_DO
         printf("error with setting don't fragment bit\n");
         exit(EXIT_FAILURE);
     }
 
-    //set TTL bit to default (255)
-    int ttlval = atoi(items[10].value);
-    if (setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttlval, sizeof(ttlval)) < 0)  {
-        printf("error with setting TTL value\n");
-        exit(EXIT_FAILURE);
-    }
-
-
-    //filling in server info
+    //fill server info
     struct sockaddr_in sin;
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(atoi(items[2].value));
-    sin.sin_addr.s_addr = inet_addr(items[0].value);
+    if (!(inet_pton(AF_INET, items[0].value, &(sin.sin_addr)) > 0)) {
+        printf("client.c 209: ERROR assigning address to socket\n");
+        exit(EXIT_FAILURE);
+    }
 
+    printf("Set server info!\n");
 
-    //create buffer
+    //initialize necessary variables
     int packet_size = atoi(items[7].value);
     int train_size = atoi(items[9].value);
-    int inter_time = atoi(items[8].value);
+    int inter_time = atoi(items[8].value) * 1000;
+    //fill buffer with 1000 0s
     char low_entropy_BUFFER[packet_size];
     memset(low_entropy_BUFFER, 0, packet_size);
-
-    //EXACT SAME AS PT 1
     //first time, set timer with inter_time
-            //while timer isn't == 0 (or packet count != 6000), run while loop
+            //while timer isn't == inter_time (or packet count != 6000), run while loop
             //to make and send UDP packets with all 0s buffer 
+    int server_wait_time = atoi(items[11].value);
+
     //basic timer
-        int sec = 0, pak_count = 0, true_count = 0;
-        clock_t before = clock();
+        printf("Sending low entropy payload!\n");
+        int pak_count = 0;
         do {
-            clock_t difference = clock() - before;
-            sec = difference / CLOCKS_PER_SEC;
             //send UDP packet (6000 times haha)
+            //setting packet ID
             low_entropy_BUFFER[0] = pak_count & 0xFF;
             low_entropy_BUFFER[1] = pak_count & 0xFF;
             if (sendto(sockfd, low_entropy_BUFFER, packet_size, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) 
                 printf("packet failed to send\n");
-            else 
-                true_count++;
             pak_count++;
-        } while ((sec <= inter_time) && (pak_count <= train_size)); 
-    
+        } while (pak_count <= train_size);
+        printf("Low entropy payload sent!\n");
+
+
     //second time, restart before timer and new difference timer
         //make random packet_data using random_file in ../dir
         char high_entropy_BUFFER[packet_size];
@@ -408,21 +408,18 @@ void send_UDP (jsonLine *items) {
         fread(high_entropy_BUFFER, sizeof(char), packet_size, fp);
         fclose(fp);
         
-
-        sec = 0, pak_count = 0, true_count = 0;
-        before = clock();
+        printf("Sending high entropy payload\n"); 
+        pak_count = 0;
         do {
-            clock_t difference = clock() - before;
-            sec = difference / CLOCKS_PER_SEC;
+            //setting packet ID
             high_entropy_BUFFER[0] = pak_count & 0xFF;
             high_entropy_BUFFER[1] = pak_count & 0xFF;
             //send UDP packet (6000 times again)
             if (sendto(sockfd, high_entropy_BUFFER, packet_size, 0, (struct sockaddr *)&sin, sizeof(sin)) < 0) 
                 printf("packet failed to send\n");
-            else 
-                true_count++;
             pak_count++;
-        } while ((sec <= inter_time) && (pak_count <= train_size));
+        } while (pak_count <= train_size);
+        printf("High entropy payload sent!\n");
     close(sockfd);
 }
 
@@ -492,12 +489,18 @@ void *recv_RST (void *arg) {
     }
 
     //chaning output res
-    if (rst_num > RST_COUNT || rst_num < RST_COUNT)
+    if (rst_num > RST_COUNT || rst_num < RST_COUNT) {
         *ans = -1;
-    else if (sec >= DIFF_THRESHOLD)
+        printf("Didn't receive enough RST packets\n");
+    }
+    else if (sec >= DIFF_THRESHOLD) {
         *ans = 0;
-    else
+        printf("Received RST packets, but res = 0\n");
+    }
+    else {
         *ans = 1;
+        printf("Received RST packets, res = 1\n");
+    }
 
     close(sockfd);
     return NULL;
