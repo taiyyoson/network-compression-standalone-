@@ -22,8 +22,6 @@
 #define ITEMS 12
 #define BUFFER_MAX 2048
 #define RST_COUNT 2
-#define INTER_TIME 15
-#define SYN_WAIT_TIME 15
 #define DIFF_THRESHOLD 100
 
 //struct to hold json line items
@@ -428,16 +426,15 @@ void send_UDP (jsonLine *items) {
 }
 
 void *recv_RST (void *arg) {
-    //sleep for SYN_WAIT_TIME seconds, wait for at least UDP packet train to send before listening for RST packets
-    sleep(SYN_WAIT_TIME);
     int sockfd;
     //typecasting our result var, this points to our result in main that we use to detect network compression
     int *ans = (int *)arg;
     //creating socket
-    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_IP)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) {
         printf("error creating socket\n");
         exit(EXIT_FAILURE);
     }
+    printf("created socket for RSTs!\n");
 
     //so we can access header fields
     int optval = 1;
@@ -445,6 +442,7 @@ void *recv_RST (void *arg) {
         printf("setsockopt failed\n");
         exit(EXIT_FAILURE);
     }
+    printf("setsockopt RST HDRINCL worked\n");
 
 
     //filling in server info
@@ -459,15 +457,20 @@ void *recv_RST (void *arg) {
         perror("Bind failed\n");
         exit(EXIT_FAILURE);
     }
+    printf("bind worked (do we need it?)\n");
 
     //incrementing these while listening for RST packets
     int rst_num = 0;
-    float sec = 0;
+    long double sec = 0;
     
+    int INTER_TIME = 15 * 1000;
     //while loop with 2 conditions: RST packet count is == 2, and timeout with inter_time
     //sec is used to calculate inter time, but it also is the time that will determine network compression
     clock_t before = clock();
     while (rst_num < RST_COUNT && sec <= INTER_TIME) {
+        clock_t difference = clock() - before;
+        sec = difference * 1000 / CLOCKS_PER_SEC;
+
         char buffer[BUFFER_MAX];
         struct sockaddr_in sender_addr;
         socklen_t sender_addr_len = sizeof(sender_addr);
@@ -487,9 +490,6 @@ void *recv_RST (void *arg) {
             printf("\nreceived RST packet\n");
             rst_num++;
         }
-
-        clock_t difference = clock() - before;
-        sec = difference / CLOCKS_PER_SEC;
     }
 
     //chaning output res
