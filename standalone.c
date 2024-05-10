@@ -271,7 +271,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
 
 
     //sending the packet
-    int res = sendto (sockfd, buffer, iph->ip_len, 0, (struct sockaddr *)&sin, sizeof(sin) < 0);
+    int res = sendto (sockfd, buffer, iph->ip_len, 0, (struct sockaddr *)&sin, sizeof(sin));
     if (res < 0) {
         printf("standalone.c 270: error sending SYN packet\n");
     }
