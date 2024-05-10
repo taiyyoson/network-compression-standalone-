@@ -1,5 +1,5 @@
 {
-  "server_ip_addr": "192.168.128.3",           
+  "server_ip_addr": "192.168.128.4",           
   "UDP_src_port": "9876",
   "UDP_dest_port": "8765",
   "TCP_dest_port_headSYN": "9999",
@@ -9,5 +9,6 @@
   "UDP_packet_size": "1000",
   "inter_time": "15",
   "UDP_train_size": "6000",
-  "UDP_TTL": "255"
+  "UDP_TTL": "255",
+  "server_wait_time": "5"
 }
