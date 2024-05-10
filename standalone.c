@@ -430,7 +430,7 @@ void *recv_RST (void *arg) {
     //typecasting our result var, this points to our result in main that we use to detect network compression
     int *ans = (int *)arg;
     //creating socket
-    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_IP)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) {
         printf("error creating socket\n");
         exit(EXIT_FAILURE);
     }
