@@ -444,6 +444,14 @@ void *recv_RST (void *arg) {
     }
     printf("setsockopt RST HDRINCL worked\n");
 
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 500000;
+    //creates timeout for recvfrom. if recvfrom waits longer than 1/2 a sec, returns -1 error
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) { //basically an inactivity timer
+        printf("error with setting timeout\n");
+        exit(EXIT_FAILURE);
+    }
 
     //filling in server info
     struct sockaddr_in sin;
@@ -462,6 +470,7 @@ void *recv_RST (void *arg) {
     //incrementing these while listening for RST packets
     int rst_num = 0;
     long double sec = 0;
+
     
     int INTER_TIME = 15 * 1000;
     //while loop with 2 conditions: RST packet count is == 2, and timeout with inter_time
@@ -475,7 +484,7 @@ void *recv_RST (void *arg) {
         struct sockaddr_in sender_addr;
         socklen_t sender_addr_len = sizeof(sender_addr);
 
-        if ((recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len)) < 0) {
+        if ((recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len)) <= 0) {
             printf("could not receive RST packet\n");
             continue;
         }
