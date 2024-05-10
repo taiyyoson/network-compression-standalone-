@@ -127,6 +127,8 @@ int main (int argc, char *argv[]) {
     if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &incl_val, sizeof(incl_val)) < 0) {
         printf("error setting IP header building to process\n");
     }
+    printf("passed seg fault?\n");
+    
     //IMPORTANT: INTIALIZE ALL VARIABLES/PARAMETERS HERE SO FUNCTION CALLS ARE ONE AFTER ANOTHER (for seamless, little delay)
     int pack_size = atoi(config[7].value);
     int port_HEADSYN = atoi(config[3].value);
