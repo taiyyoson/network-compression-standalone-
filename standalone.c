@@ -29,7 +29,7 @@
 //struct to hold json line items
 typedef struct {
     char *key;
-    const char *value;
+    char *value;
 } jsonLine;
 
 
