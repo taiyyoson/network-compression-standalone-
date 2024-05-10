@@ -98,6 +98,7 @@ int main (int argc, char *argv[]) {
     if ((pthread_create(&thread, NULL, recv_RST, (void *)&res)) != 0) {
         printf("error with creating thread\n");
     }
+    printf("Made thread!\n");
             //creates socket using IPPROTO_IP, not IPPROTO_TCP
             //QUESTIONS: figure out if you need to bind socket, what to put in struct sockaddr_in, etc
                 //do we need to listen?? or just receive? figure this out
