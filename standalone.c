@@ -405,8 +405,9 @@ void send_UDP (jsonLine *items) {
         //make random packet_data using random_file in ../dir
         char high_entropy_BUFFER[packet_size];
         FILE *fp;
-        if ((fp = fopen("../random_file", "rb")) == NULL) {
+        if ((fp = fopen("random_file", "rb")) == NULL) {
             printf("error opening file\n");
+            exit(EXIT_FAILURE);
         }
         fread(high_entropy_BUFFER, sizeof(char), packet_size, fp);
         fclose(fp);
