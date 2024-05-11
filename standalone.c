@@ -479,6 +479,8 @@ void *recv_RST (void *arg) {
     
     for (int i=0; i < RST_COUNT; i++) {
         int rec_RST = recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len);
+        char str[50];
+        printf("%s: %d\n", inet_ntop(AF_INET, &(sender_addr.sin_addr), str, 50), ntohs(sender_addr.sin_port));
         if (rec_RST <= 0) {
             printf("could not receive RST packet\n");
             continue;
