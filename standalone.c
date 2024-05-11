@@ -263,6 +263,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(PORT);
+    printf("SENDING SYN PACKET TO PORT %d\n", PORT);
     if (!(inet_pton(AF_INET, ADDR, &(sin.sin_addr)) > 0)) {
         printf("standalone.c 262: ERROR assigning address to socket\n");
         exit(EXIT_FAILURE);
@@ -446,7 +447,7 @@ void *recv_RST (void *arg) {
     printf("setsockopt RST HDRINCL worked\n");
 
     struct timeval timeout;
-    timeout.tv_sec = INTER_TIME;
+    timeout.tv_sec = INTER_TIME*2;
     timeout.tv_usec = 0;
     //creates timeout for RST packets, if longer than INTER_TIME (15 seconds), timeout, move on
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) { //basically an inactivity timer
@@ -479,8 +480,6 @@ void *recv_RST (void *arg) {
     
     for (int i=0; i < RST_COUNT; i++) {
         int rec_RST = recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len);
-        char str[50];
-        printf("%s: %d\n", inet_ntop(AF_INET, &(sender_addr.sin_addr), str, 50), ntohs(sender_addr.sin_port));
         if (rec_RST <= 0) {
             printf("could not receive RST packet\n");
             continue;
@@ -501,6 +500,8 @@ void *recv_RST (void *arg) {
             }
         }
     }
+    clock_t after = clock() - before;
+    sec = (after * 1000 / CLOCKS_PER_SEC);
 
 
     //chaning output res
@@ -508,7 +509,7 @@ void *recv_RST (void *arg) {
         *ans = -1;
         printf("Didn't receive enough RST packets\n");
     }
-    else if (sec >= DIFF_THRESHOLD) {
+    else if (sec >= DIFF_THRESHOLD) { //DIFF_THRESHOLD set to 100 (ms)
         *ans = 0;
         printf("Received RST packets, but res = 0\n");
     }
