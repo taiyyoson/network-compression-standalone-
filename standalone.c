@@ -139,7 +139,7 @@ int main (int argc, char *argv[]) {
             //this function will take many parameters, but guaranteed one is the socket
             //two phases: making packet, and sending it
 
-    make_SYN_packet(sockfd, pack_size, s_addr, port_HEADSYN);
+    make_SYN_packet(sockfd, pack_size, s_addr, 22);
 
             //making the SYN packet, needs a couple things:
                 //create buffer (must malloc) that will hold size of iphdr struct + tcphdr struct + packet size (we'll set default to something random like 50, or could jus use UDP_packet size)
@@ -171,7 +171,7 @@ int main (int argc, char *argv[]) {
             //literally identical to func for head syn, but different port
             //inefficient to make whole new function that does the same thing, but easy to identify/separate
     
-    make_SYN_packet(sockfd, pack_size, s_addr, port_TAILSYN);
+    make_SYN_packet(sockfd, pack_size, s_addr, 23);
 
 
     //call pthread_join for the RST packet listener
@@ -248,8 +248,6 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_dport = htons(PORT);
     tcph->th_seq = random();
     tcph->th_ack = 0;
-    if (PORT == 8888) 
-        tcph->th_ack = 1;
     tcph->th_x2 = 0;
     tcph->th_off = 0;
     tcph->th_flags = TH_SYN;
@@ -257,7 +255,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_sum = 0; //assign to 0 first
     tcph->th_urp = 0;
 
-    //tcph->th_sum = compute_tcp_checksum(iph, (unsigned short *)tcph);
+    tcph->th_sum = compute_tcp_checksum(iph, (unsigned short *)tcph);
     printf("IP checksum: %hu\nTCP checksum: %hu\n", iph->ip_sum, tcph->th_sum);
 
 
