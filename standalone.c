@@ -248,6 +248,8 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_dport = htons(PORT);
     tcph->th_seq = random();
     tcph->th_ack = 0;
+    if (PORT == 8888) 
+        tcph->th_ack = 1;
     tcph->th_x2 = 0;
     tcph->th_off = 0;
     tcph->th_flags = TH_SYN;
