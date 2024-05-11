@@ -256,6 +256,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_urp = 0;
 
     tcph->th_sum = compute_tcp_checksum(iph, (unsigned short *)tcph);
+    printf("IP checksum: %hu\nTCP checksum: %hu\n", iph->ip_sum, tcph->th_sum);
 
 
     //fill in server info
