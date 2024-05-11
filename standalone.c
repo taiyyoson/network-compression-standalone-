@@ -238,10 +238,10 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     iph->ip_ttl = 255;
     iph->ip_p = IPPROTO_TCP;
     iph->ip_sum = 0; //assign to 0 first
-    iph->ip_src.s_addr = inet_addr("192.168.128.5");
+    iph->ip_src.s_addr = INADDR_ANY;
     iph->ip_dst.s_addr = inet_addr(ADDR);
 
-    iph->ip_sum = csum((unsigned short *) buffer, iph->ip_len >> 1);
+    //iph->ip_sum = csum((unsigned short *) buffer, iph->ip_len >> 1);
 
     //tcphdr
     tcph->th_sport = htons(1234);
@@ -255,7 +255,7 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_sum = 0; //assign to 0 first
     tcph->th_urp = 0;
 
-    tcph->th_sum = compute_tcp_checksum(iph, (unsigned short *)tcph);
+    //tcph->th_sum = compute_tcp_checksum(iph, (unsigned short *)tcph);
     printf("IP checksum: %hu\nTCP checksum: %hu\n", iph->ip_sum, tcph->th_sum);
 
 
