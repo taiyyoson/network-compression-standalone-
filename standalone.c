@@ -23,6 +23,7 @@
 #define BUFFER_MAX 2048
 #define RST_COUNT 2
 #define DIFF_THRESHOLD 100
+#define INTER_TIME 15
 
 //struct to hold json line items
 typedef struct {
@@ -445,9 +446,9 @@ void *recv_RST (void *arg) {
     printf("setsockopt RST HDRINCL worked\n");
 
     struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 500000;
-    //creates timeout for recvfrom. if recvfrom waits longer than 1/2 a sec, returns -1 error
+    timeout.tv_sec = INTER_TIME;
+    timeout.tv_usec = 0;
+    //creates timeout for RST packets, if longer than INTER_TIME (15 seconds), timeout, move on
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) { //basically an inactivity timer
         printf("error with setting timeout\n");
         exit(EXIT_FAILURE);
@@ -468,42 +469,40 @@ void *recv_RST (void *arg) {
     printf("bind worked (do we need it?)\n");
 
     //incrementing these while listening for RST packets
-    int rst_num = 0;
+    int rst_num = 0, timer = 0;
     long double sec = 0;
 
-    
-    int INTER_TIME = 15 * 1000;
-    //while loop with 2 conditions: RST packet count is == 2, and timeout with inter_time
-    //sec is used to calculate inter time, but it also is the time that will determine network compression
+    char buffer[BUFFER_MAX];
+    struct sockaddr_in sender_addr;
     clock_t before = clock();
-    while (rst_num < RST_COUNT && sec <= INTER_TIME) {
-        clock_t difference = clock() - before;
-        sec = difference * 1000 / CLOCKS_PER_SEC;
-        printf("%Lf\n", sec);
-
-        char buffer[BUFFER_MAX];
-        struct sockaddr_in sender_addr;
-        socklen_t sender_addr_len = sizeof(sender_addr);
-
-        if ((recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len)) <= 0) {
+    socklen_t sender_addr_len = sizeof(sender_addr);
+    
+    for (int i=0; i < RST_COUNT; i++) {
+        int rec_RST = recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len);
+        if (rec_RST <= 0) {
             printf("could not receive RST packet\n");
             continue;
         }
+        else if (rec_RST > 0) {
+            //parse through the packet, access tcph is what we want
+            struct ip *iph = (struct ip *)buffer;
+            struct tcphdr *tcph = (struct tcphdr *)(buffer + sizeof(struct ip));
 
-
-        //parse through the packet, access tcph is what we want
-        struct ip *iph = (struct ip *)buffer;
-        struct tcphdr *tcph = (struct tcphdr *)(buffer + sizeof(struct ip));
-
-        //is this packet a RST packet? if so, increase the count, we should be getting two
-        if ((tcph->th_flags) == TH_RST) {
-            printf("\nreceived RST packet\n");
-            rst_num++;
+            //is this packet a RST packet? if so, increase the count, we should be getting two
+            if ((tcph->th_flags) == TH_RST) {
+                printf("\nreceived RST packet\n");
+                rst_num++;
+                if (timer == 0) {
+                    before = clock();
+                    timer++;
+                }
+            }
         }
     }
 
+
     //chaning output res
-    if (rst_num > RST_COUNT || rst_num < RST_COUNT) {
+    if (rst_num < RST_COUNT) {
         *ans = -1;
         printf("Didn't receive enough RST packets\n");
     }
