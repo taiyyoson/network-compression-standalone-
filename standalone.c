@@ -364,9 +364,6 @@ unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload) 
 
 
 
-
-
-
 /***
  * send_UDP handles the whole probing phase. It creates a socket and immediately sends the low entropy payload,
  *  then sends the high entropy payload
@@ -397,6 +394,22 @@ void send_UDP (jsonLine *items)
         printf("error with setting don't fragment bit\n");                            //if MacOS, use IP_DONTFRAG & 1
         exit(EXIT_FAILURE);
     }
+
+
+    //struct for client info
+    struct sockaddr_in clientsin;
+    memset(&clientsin, 0, sizeof(clientsin));
+    clientsin.sin_family = AF_INET;
+    clientsin.sin_port = htons(atoi(items[1].value)); //setting UDP src port
+    clientsin.sin_addr.s_addr = INADDR_ANY; //set to any address, client is sending UDP data, not receiving, so doesn't matter
+
+    //bind socket, basic error handling (so standalone knows which port to send UDP from)
+    if (bind(sockfd, (struct sockaddr *)&clientsin, sizeof(clientsin)) < 0) 
+    {
+        printf("couldn't bind socket to UDP src port!\n");
+        exit(EXIT_FAILURE);
+    }
+
 
     //fill server info
     struct sockaddr_in sin;
