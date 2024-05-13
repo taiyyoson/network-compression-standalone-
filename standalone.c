@@ -26,12 +26,13 @@
 #define INTER_TIME 15
 
 //struct to hold json line items
-typedef struct {
+typedef struct 
+{
     char *key;
     char *value;
 } jsonLine;
 
-
+//functions made, proper descriptions given at actual function bodies
 void send_UDP (jsonLine *items); //sending UDP packet trains, exact same as pt 1
 static unsigned short compute_checksum(unsigned short *addr, unsigned int count);//computing IP and TCP checksums
 unsigned short csum (unsigned short *buf, int nwords);
@@ -40,7 +41,14 @@ void make_SYN_packet (int sockfd, int packet_size, char *ADDR, int PORT); //maki
 cJSON *JSONObj(char *input[]); //same as pt 1, initializing json parser
 void *recv_RST (void *arg); //receiving RST packets, and calculating the difference, ran in a separate thread
 
-int main (int argc, char *argv[]) {
+/***
+ * main makes the function cals, sends SYN packets and UDP payloads, and listens for RST packets on separate thread
+ * argc is the number of arguments given on the cmd line
+ * argv is an array of strings allocated for each argument on the cmd line
+*/
+int main (int argc, char *argv[]) 
+{
+    //my vague notes/game plan
     /*
     1. Create raw socket for TCP SYN packet
     2. Fill the buffer with the IP header
@@ -50,17 +58,17 @@ int main (int argc, char *argv[]) {
     6. Listen for RST packets and then use that to calculate the time difference
     */
     
-    //FIRST, parse json file and store in struct like in pt 1 client.c
-    if (argc < 2) {
+    //checking there is a config.json
+    if (argc < 2) 
+    {
         printf("missing JSON file in cmd line arg!\n");
         return EXIT_FAILURE;
     }
-    //array of structs, representing config.json
+    //root to make JSON calls
     cJSON *json = JSONObj(argv);
   
     // access the JSON data 
     cJSON *server_ip_addr = cJSON_GetObjectItemCaseSensitive(json, "server_ip_addr"); 
-    //printf("%s\n", server_ip_addr->valuestring);
     cJSON *UDP_src_port = cJSON_GetObjectItemCaseSensitive(json, "UDP_src_port"); 
     cJSON *UDP_dest_port = cJSON_GetObjectItemCaseSensitive(json, "UDP_dest_port"); 
     cJSON *TCP_dest_port_headSYN = cJSON_GetObjectItemCaseSensitive(json, "TCP_dest_port_headSYN"); 
@@ -73,7 +81,9 @@ int main (int argc, char *argv[]) {
     cJSON *UDP_TTL = cJSON_GetObjectItemCaseSensitive(json, "UDP_TTL"); 
     cJSON *server_wait_time = cJSON_GetObjectItemCaseSensitive(json, "server_wait_time");
 
-    jsonLine config[ITEMS] = {
+    //create struct array mimicking config.json 
+    jsonLine config[ITEMS] = 
+    {
       {"server_ip_addr", server_ip_addr->valuestring},
       {"UDP_src_port", UDP_src_port->valuestring},
       {"UDP_dest_port", UDP_dest_port->valuestring},
@@ -89,41 +99,35 @@ int main (int argc, char *argv[]) {
     };
 
 
-    //LAST, create and start thread to call recv_RST for listening for RST packets
+    //create and start thread to call recv_RST for listening for RST packets right away
         // Create thread 1
-        //recv_RST() func
+        //void *res is the data i need to determine if there's network compression or not 
     pthread_t thread;
     int res = 0;
-    if ((pthread_create(&thread, NULL, recv_RST, (void *)&res)) != 0) {
+    if ((pthread_create(&thread, NULL, recv_RST, (void *)&res)) != 0) //basic error handling
+    {
         printf("error with creating thread\n");
     }
+    //update statement
     printf("Made thread!\n");
-            //creates socket using IPPROTO_IP, not IPPROTO_TCP
-            //QUESTIONS: figure out if you need to bind socket, what to put in struct sockaddr_in, etc
-                //do we need to listen?? or just receive? figure this out
-                //we do need to account for timeout, if no RSTs are received
-            //start listening for RST packets
-                //after receive first packet, record time, then record time again after you receive the second RST packet
-            //recv_RST will be a void func, but will TAKE an int ptr, store 1 if network compression, 0 if none, -1 if error
-        //remember, call pthread_join for this func after sending tail SYN packet, if before, infinite loop 
 
 
 
 
-    //SECOND, open socket for SYN head and tail packets (you will pass this into make_head and make_tail func), remember this is a raw socket
+    //open socket for SYN head and tail packets (you will pass this into make_head and make_tail func), remember this is a raw socket
+    //used for both SYN packets, not just one
     int sockfd;
-    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) {
-	    printf("ERROR opening socket\n");
+    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) 
+    {
+	    printf("ERROR opening socket\n"); // basic error handling
         exit(0);
     }
     printf("Socket created!\n");
-        //need to enable header included so YOU make the header for the packet
-            /* allow process to build IP header
-                    int one = 1;
-                    const int *val = &one;
-                    setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, val, sizeof(one));*/
+    
+    //need to enable header included so I make the header for the packet, not the kernel
     int incl_val = 1;
-    if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &incl_val, sizeof(incl_val)) < 0) {
+    if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &incl_val, sizeof(incl_val)) < 0) 
+    {
         printf("error setting IP header building to process\n");
     }
 
@@ -135,49 +139,26 @@ int main (int argc, char *argv[]) {
     char *s_addr = config[0].value;
     
 
-        //make_HEAD_SYN()  
-            //this function will take many parameters, but guaranteed one is the socket
-            //two phases: making packet, and sending it
-
-    make_SYN_packet(sockfd, pack_size, s_addr, 22);
-
-            //making the SYN packet, needs a couple things:
-                //create buffer (must malloc) that will hold size of iphdr struct + tcphdr struct + packet size (we'll set default to something random like 50, or could jus use UDP_packet size)
-                //create new ip header struct, point to beginning of buffer
-                //create new tcp header struct, point to after ip header in the buffer still  
-                    //must typecast
-                    //Char *buffer = (char*)malloc(ip header length + tcp header length + packet length);
-                    //struct ipheader *ipheader = (struct ipheader*)buffer;    
-                    //*struct tcpheader *tcpheader = (struct tcpheader*)(buffer + sizeof(struct ipheader))
-                //FILL all these header fields in, will take some time, use extra function if you want
-                    //will need extra functions, like calculating checksum
-                //create new sockaddr struct, needed to send packet
-                    //fill in like usual, like in pt 1
-
-            //sending the SYN packet
-                //send it! add some error handling, then immediately exit func to start the UDP train
+    //making HEAD SYN packet
+    make_SYN_packet(sockfd, pack_size, s_addr, port_HEADSYN);
 
 
 
-    //THIRD, sending UDP packet trains
-        //remember, you can reuse code from pt 1, since not using raw sockets for UDP packets
-        //set default TTL value tho
+
+   
+   //Sending UDP trains,reusing code from pt 1 mostly
     send_UDP(config); 
 
 
 
-    //FOURTH, reuse raw socket from second, but make new packe
-        //make_TAIL_SYN()
-            //literally identical to func for head syn, but different port
-            //inefficient to make whole new function that does the same thing, but easy to identify/separate
-    
-    make_SYN_packet(sockfd, pack_size, s_addr, 23);
+    //making TAIL SYN packet (diff port)    
+    make_SYN_packet(sockfd, pack_size, s_addr, port_TAILSYN);
 
 
     //call pthread_join for the RST packet listener
-    //LAST LAST, print output for network compression detection
     pthread_join(thread, NULL);
 
+    //output from the thread, passed it as a pointer
     if (res == 1) 
         printf("\nNetwork compression DETECTED!\n");
     else if (res == 0)
@@ -188,15 +169,24 @@ int main (int argc, char *argv[]) {
 
 
     //and then, DONE WITH PT 2   
-    cJSON_Delete(json);
+    cJSON_Delete(json); //dereference memory
     close(sockfd);
     return EXIT_SUCCESS; 
 }
 
-cJSON *JSONObj(char *input[]) {
+
+
+/***
+ * JSONObj simply creates the JSON object needed to make calls to my config.json file. 
+ * input is the command line argument argv, used to identify filename config.json
+ * returns a root of type cJSON, which can be used to access config.json
+*/
+cJSON *JSONObj(char *input[]) 
+{
     // open the file 
     FILE *fp = fopen(input[1], "r"); 
-    if (fp == NULL) { 
+    if (fp == NULL) //basic error handling
+    { 
         printf("Error: Unable to open the file.\n"); 
         exit(EXIT_FAILURE); 
     } 
@@ -220,10 +210,16 @@ cJSON *JSONObj(char *input[]) {
     return json;
 }
 
+/***
+ * make_SYN_packet takes a created socket and makes the TCP packet from scratch. then sends it like a regular UDP packet
+ * sockfd is the socket
+ * packet_size is the packet_size i want it to be, but doesn't really matter, so using packet_size from config json (1000B)
+ * ADDR is the char array that holds the server IP address
+ * PORT is the destination port (closed one)
+*/
 void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     //making the packet
-    //using UDP packet size, doesn't really matter, but for contiuency
-    char *buffer = (char *) malloc(packet_size + sizeof(struct tcphdr) + sizeof(struct ip));
+    char *buffer = (char *) malloc(packet_size + sizeof(struct tcphdr) + sizeof(struct ip)); //buffer holds payload PLUS headers
     //assigning ip and tcp header fields in the buffer
     struct ip *iph = (struct ip*) buffer;
     struct tcphdr *tcph = (struct tcphdr*) (buffer + sizeof(struct ip));
@@ -256,7 +252,8 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     tcph->th_urp = 0;
 
     tcph->th_sum = compute_tcp_checksum(iph, (unsigned short *)tcph);
-    printf("IP checksum: %hu\nTCP checksum: %hu\n", iph->ip_sum, tcph->th_sum);
+    //testing
+    //printf("IP checksum: %hu\nTCP checksum: %hu\n", iph->ip_sum, tcph->th_sum);
 
 
     //fill in server info
@@ -264,8 +261,10 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(PORT);
+    //printing outgoing dest port
     printf("SENDING SYN PACKET TO PORT %d\n", PORT);
-    if (!(inet_pton(AF_INET, ADDR, &(sin.sin_addr)) > 0)) {
+    if (!(inet_pton(AF_INET, ADDR, &(sin.sin_addr)) > 0)) 
+    {
         printf("standalone.c 262: ERROR assigning address to socket\n");
         exit(EXIT_FAILURE);
     }
@@ -273,15 +272,21 @@ void make_SYN_packet(int sockfd, int packet_size, char *ADDR, int PORT) {
 
     //sending the packet
     int res = sendto (sockfd, buffer, iph->ip_len, 0, (struct sockaddr *)&sin, sizeof(sin));
-    if (res < 0) {
+    if (res < 0) //error handling
         printf("standalone.c 270: error sending SYN packet\n");
-    }
     else 
         printf("Sent SYN packet!\n");
 }
 
-//2 diff checksum functions, do the same thing
+//2 diff checksum functions, do the same thing, got these from the internet
 //i will be using csum
+
+/***
+ * csum & compute_checksum both calculate the ip checksum
+ * buf is the buffer to be used
+ * nwords is the length of the ip header
+ * returns the checksum
+*/
 unsigned short csum (unsigned short *buf, int nwords) {
     unsigned long sum;
     for (sum = 0; nwords > 0; nwords--)
@@ -290,6 +295,10 @@ unsigned short csum (unsigned short *buf, int nwords) {
     sum += (sum >> 16);
     return ~sum;
 }
+/***
+ * addr is the IP address
+ * count is the length of the ip header
+*/
 static unsigned short compute_checksum(unsigned short *addr, unsigned int count) {
   register unsigned long sum = 0;
   while (count > 1) {
@@ -311,6 +320,12 @@ static unsigned short compute_checksum(unsigned short *addr, unsigned int count)
 
 //tcp checksum function, uses pseudo IP header
 /* set tcp checksum: given IP header and tcp segment */
+/***
+ * compute_tcp_checksum computes the tcp checksum (lol)
+ * pIph is the pseudo IP header
+ * ipPayload is the tcp segment
+ * returns checksum
+*/
 unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload) {
     register unsigned long sum = 0;
     unsigned short tcpLen = ntohs(pIph->ip_len) - (pIph->ip_hl<<2);
@@ -348,18 +363,38 @@ unsigned short compute_tcp_checksum(struct ip *pIph, unsigned short *ipPayload) 
 }
 
 
-void send_UDP (jsonLine *items) { 
+
+
+
+
+/***
+ * send_UDP handles the whole probing phase. It creates a socket and immediately sends the low entropy payload,
+ *  then sends the high entropy payload
+ * items is a jsonLine array consisting of all infro from config.json
+*/
+void send_UDP (jsonLine *items) 
+{ 
     //create socket
     int sockfd;
-    if ((sockfd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_DGRAM, 0)) == -1) 
+    {
         printf("Error making UDP socket\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //set TTL bit to default (255)
+    int ttlval = atoi(items[10].value);
+    if (setsockopt(sockfd, IPPROTO_IP, IP_TTL, &ttlval, sizeof(ttlval)) < 0) 
+    {
+        printf("error with setting TTL value\n");
         exit(EXIT_FAILURE);
     }
 
     //set DF bit
     int dfval = IP_PMTUDISC_DO; //linux df bit
-    if (setsockopt(sockfd, IPPROTO_IP, IP_MTU_DISCOVER, &dfval, sizeof(dfval)) < 0) { //if linux, use IP_MTU_DISCOVER & IP_PMTUDISC_DO
-        printf("error with setting don't fragment bit\n");
+    if (setsockopt(sockfd, IPPROTO_IP, IP_MTU_DISCOVER, &dfval, sizeof(dfval)) < 0)   //if linux, use IP_MTU_DISCOVER & IP_PMTUDISC_DO
+    { //if linux, use IP_MTU_DISCOVER & IP_PMTUDISC_DO
+        printf("error with setting don't fragment bit\n");                            //if MacOS, use IP_DONTFRAG & 1
         exit(EXIT_FAILURE);
     }
 
@@ -368,11 +403,13 @@ void send_UDP (jsonLine *items) {
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
     sin.sin_port = htons(atoi(items[2].value));
-    if (!(inet_pton(AF_INET, items[0].value, &(sin.sin_addr)) > 0)) {
-        printf("client.c 209: ERROR assigning address to socket\n");
+    if (!(inet_pton(AF_INET, items[0].value, &(sin.sin_addr)) > 0)) //basic error handling
+    {
+        printf("standalone.c 400: ERROR assigning address to socket\n");
         exit(EXIT_FAILURE);
     }
 
+    //update statement
     printf("Set server info!\n");
 
     //initialize necessary variables
@@ -382,15 +419,13 @@ void send_UDP (jsonLine *items) {
     //fill buffer with 1000 0s
     char low_entropy_BUFFER[packet_size];
     memset(low_entropy_BUFFER, 0, packet_size);
-    //first time, set timer with inter_time
-            //while timer isn't == inter_time (or packet count != 6000), run while loop
-            //to make and send UDP packets with all 0s buffer 
-    int server_wait_time = atoi(items[11].value);
 
-    //basic timer
+
+    //LOW ENTROPY PAYLOAD
         printf("Sending low entropy payload!\n");
         int pak_count = 0;
-        do {
+        do 
+        {
             //send UDP packet (6000 times haha)
             //setting packet ID
             low_entropy_BUFFER[0] = pak_count & 0xFF;
@@ -402,11 +437,12 @@ void send_UDP (jsonLine *items) {
         printf("Low entropy payload sent!\n");
 
 
-    //second time, restart before timer and new difference timer
+    //HIGH ENTROPY PAYLODA
         //make random packet_data using random_file in ../dir
         char high_entropy_BUFFER[packet_size];
         FILE *fp;
-        if ((fp = fopen("random_file", "rb")) == NULL) {
+        if ((fp = fopen("random_file", "rb")) == NULL) 
+        {
             printf("error opening file\n");
             exit(EXIT_FAILURE);
         }
@@ -415,7 +451,8 @@ void send_UDP (jsonLine *items) {
         
         printf("Sending high entropy payload\n"); 
         pak_count = 0;
-        do {
+        do 
+        {
             //setting packet ID
             high_entropy_BUFFER[0] = pak_count & 0xFF;
             high_entropy_BUFFER[1] = pak_count & 0xFF;
@@ -425,15 +462,23 @@ void send_UDP (jsonLine *items) {
             pak_count++;
         } while (pak_count <= train_size);
         printf("High entropy payload sent!\n");
+    //close socket
     close(sockfd);
 }
 
+/***
+ * recv_RST is running on a separate thread from the beginning to minimize delay while listening for response RST packets,
+ *  should get response RST packets cuz sending SYN packets to closed ports
+ * arg is the void* res i passed when creating the thread
+ * return NULL, signal end of thread
+*/
 void *recv_RST (void *arg) {
     int sockfd;
     //typecasting our result var, this points to our result in main that we use to detect network compression
     int *ans = (int *)arg;
     //creating socket
-    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) {
+    if ((sockfd = socket(PF_INET, SOCK_RAW, IPPROTO_TCP)) == -1) //basic error handling
+    {
         printf("error creating socket\n");
         exit(EXIT_FAILURE);
     }
@@ -441,17 +486,20 @@ void *recv_RST (void *arg) {
 
     //so we can access header fields
     int optval = 1;
-    if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &optval, sizeof(optval)) < 0) {
+    if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &optval, sizeof(optval)) < 0) //basic error handling
+    {
         printf("setsockopt failed\n");
         exit(EXIT_FAILURE);
     }
+    //update statement
     printf("setsockopt RST HDRINCL worked\n");
 
     struct timeval timeout;
     timeout.tv_sec = INTER_TIME*2;
     timeout.tv_usec = 0;
-    //creates timeout for RST packets, if longer than INTER_TIME (15 seconds), timeout, move on
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) { //basically an inactivity timer
+    //creates timeout for RST packets, if longer than INTER_TIME (15 seconds) * 2, timeout, move on
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) //basically an inactivity timer
+    { 
         printf("error with setting timeout\n");
         exit(EXIT_FAILURE);
     }
@@ -464,28 +512,35 @@ void *recv_RST (void *arg) {
     sin.sin_port = 0;
 
     //bind, isn't necessary but nice practice
-    if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+    if (bind(sockfd, (struct sockaddr *)&sin, sizeof(sin)) < 0) 
+    {
         perror("Bind failed\n");
         exit(EXIT_FAILURE);
     }
+    //update statement
     printf("bind worked (do we need it?)\n");
 
     //incrementing these while listening for RST packets
     int rst_num = 0, timer = 0;
     long double sec = 0;
-
+    //initialization
     char buffer[BUFFER_MAX];
     struct sockaddr_in sender_addr;
     clock_t before = clock();
     socklen_t sender_addr_len = sizeof(sender_addr);
     
-    for (int i=0; i < RST_COUNT; i++) {
+    //for loop to listten for only TWO RST packets
+    for (int i=0; i < RST_COUNT; i++) 
+    {
+        //each recvfrom call waits for 30 seconds (cuz i set the timeout)
         int rec_RST = recvfrom(sockfd, buffer, BUFFER_MAX, 0, (struct sockaddr *)&sender_addr, &sender_addr_len);
-        if (rec_RST <= 0) {
+        if (rec_RST <= 0) //couldn't get packet
+        {
             printf("could not receive RST packet\n");
             continue;
         }
-        else if (rec_RST > 0) {
+        else if (rec_RST > 0) //did get packet, check it's an RST packet
+        {
             //parse through the packet, access tcph is what we want
             struct ip *iph = (struct ip *)buffer;
             struct tcphdr *tcph = (struct tcphdr *)(buffer + sizeof(struct ip));
@@ -499,22 +554,28 @@ void *recv_RST (void *arg) {
                     timer++;
                 }
             }
+            else
+                i--; //decrement, we don't want anything but RST packets
         }
     }
+    //stop timer
     clock_t after = clock() - before;
     sec = (after * 1000 / CLOCKS_PER_SEC);
 
 
-    //chaning output res
-    if (rst_num < RST_COUNT) {
+    //changing output res
+    if (rst_num < RST_COUNT) 
+    {
         *ans = -1;
         printf("Didn't receive enough RST packets\n");
     }
-    else if (sec >= DIFF_THRESHOLD) { //DIFF_THRESHOLD set to 100 (ms)
+    else if (sec >= DIFF_THRESHOLD) 
+    { //DIFF_THRESHOLD set to 100 (ms)
         *ans = 0;
         printf("Received RST packets, but res = 0\n");
     }
-    else {
+    else 
+    {
         *ans = 1;
         printf("Received RST packets, res = 1\n");
     }
